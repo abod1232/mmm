@@ -1,4 +1,24 @@
-# (مقتطف: داخل job الخاص بالـ build)
+name: Build
+
+# https://docs.github.com/en/actions/learn-github-actions/workflow-syntax-for-github-actions#concurrency
+concurrency: 
+  group: "build"
+  cancel-in-progress: true
+
+on:
+  push:
+    branches:
+      # choose your default branch
+      - master
+      - main
+    paths-ignore:
+      - '*.md'
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+    # (مقتطف: داخل job الخاص بالـ build)
     steps:
       - name: Checkout source
         uses: actions/checkout@v4
@@ -52,25 +72,4 @@
             git config user.name "GitHub Actions"
             git commit -m "Build $GITHUB_SHA"
             git push --force origin HEAD:builds
-          fi        with:
-          java-version: 17
-
-      - name: Setup Android SDK
-        uses: android-actions/setup-android@v2
-
-      - name: Build Plugins
-        run: |
-          cd $GITHUB_WORKSPACE/src
-          chmod +x gradlew
-          ./gradlew make makePluginsJson
-          cp **/build/*.cs3 $GITHUB_WORKSPACE/builds
-          cp build/plugins.json $GITHUB_WORKSPACE/builds
-
-      - name: Push builds
-        run: |
-          cd $GITHUB_WORKSPACE/builds
-          git config --local user.email "actions@github.com"
-          git config --local user.name "GitHub Actions"
-          git add .
-          git commit --amend -m "Build $GITHUB_SHA" || exit 0   # do not error if nothing to commit
-          git push --force
+          fi
