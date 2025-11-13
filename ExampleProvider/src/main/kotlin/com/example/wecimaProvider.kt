@@ -1,5 +1,4 @@
-
-package com.wecima
+package com.wecima // تم تصحيح اسم الحزمة
 
 import com.lagradost.cloudstream3.*
 import com.lagradost.cloudstream3.utils.*
@@ -41,7 +40,6 @@ class WecimaProvider : MainAPI() {
         val href = this.selectFirst("a")?.attr("href") ?: return null
         val posterUrl = this.selectFirst("span.BG--GridItem")?.let {
             val style = it.attr("style")
-            // --image:url(XXX)
             Regex("url\\((.*?)\\)").find(style)?.groupValues?.get(1)
         } ?: this.selectFirst("span.BG--GridItem")?.attr("data-src")
 
@@ -63,15 +61,15 @@ class WecimaProvider : MainAPI() {
             data = mapOf("q" to query),
             referer = "$mainUrl/"
         ).parsed<SearchRoot>()
-        
+
         val html = response.output.joinToString("")
         val document = org.jsoup.Jsoup.parse(html)
-        
+
         return document.select("div.GridItem").mapNotNull {
             it.toSearchResult()
         }
     }
-    
+
     data class SearchRoot (
         @JsonProperty("output" ) val output : ArrayList<String> = arrayListOf()
     )
@@ -86,7 +84,7 @@ class WecimaProvider : MainAPI() {
         val year = document.select("ul.Terms--Content--Single-begin li")
             .find { it.selectFirst("span")?.text()?.contains("السنة") == true }
             ?.selectFirst("p")?.text()?.toIntOrNull()
-        
+
         val isMovie = !url.contains("/series/")
 
         if (isMovie) {
@@ -115,12 +113,11 @@ class WecimaProvider : MainAPI() {
                         val epNum = Regex("الحلقة (\\d+)").find(epTitle)?.groupValues?.get(1)?.toIntOrNull()
                         val epHref = epEl.attr("href")
                         episodes.add(
-                            newEpisode(
-                    data = epHref
-                ) {
-                    name = epTitle
-                    this.season = seasonNum
-                    this.episode = epNum
+                            newEpisode(epHref) {
+                                name = epTitle
+                                season = seasonNum
+                                episode = epNum
+                            }
                         )
                     }
                 }
@@ -130,17 +127,15 @@ class WecimaProvider : MainAPI() {
                     val epNum = Regex("الحلقة (\\d+)").find(epTitle)?.groupValues?.get(1)?.toIntOrNull()
                     val epHref = epEl.attr("href")
                     episodes.add(
-                        newEpisode(
-                    data = epHref
-                ) {
-                    name = epTitle
-                    this.season = 1
-                    this.episode = epNum
-                }
+                        newEpisode(epHref) {
+                            name = epTitle
+                            season = 1 // Default to season 1
+                            episode = epNum
+                        }
                     )
                 }
             }
-            
+
             return newTvSeriesLoadResponse(title, url, TvType.TvSeries, episodes.sortedBy { it.episode }) {
                 this.posterUrl = posterUrl
                 this.plot = plot
@@ -148,7 +143,7 @@ class WecimaProvider : MainAPI() {
             }
         }
     }
-    
+
     override suspend fun loadLinks(
         data: String,
         isCasting: Boolean,
@@ -156,15 +151,13 @@ class WecimaProvider : MainAPI() {
         callback: (ExtractorLink) -> Unit
     ): Boolean {
         val document = app.get(data).document
-        
-        document.select("ul.WatchServersList li btn").forEach {
+
+        document.select("ul.WatchServersList li btn").apmap {
             val encodedUrl = it.attr("data-url")
-            // Wecima uses a slightly non-standard Base64 encoding.
-            // It replaces some characters. Let's fix them before decoding.
-            val fixedEncodedUrl = encodedUrl.replace(" ", "+").replace("+", " ")
-                .replace(" ", "/")
-                .replace(" ", "=")
+            // Wecima's Base64 is a bit weird, manually fix it.
+            val fixedEncodedUrl = encodedUrl.replace(" ", "+")
             try {
+                // The URL is plain Base64, but needs decoding.
                 val decodedUrl = String(Base64.decode(fixedEncodedUrl, Base64.DEFAULT))
                 if (decodedUrl.startsWith("http")) {
                    loadExtractor(decodedUrl, mainUrl, subtitleCallback, callback)
