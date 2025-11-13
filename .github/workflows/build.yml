@@ -18,58 +18,41 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-    # (مقتطف: داخل job الخاص بالـ build)
-    steps:
-      - name: Checkout source
-        uses: actions/checkout@v4
+      - name: Checkout
+        uses: actions/checkout@master
         with:
-          path: src
-          fetch-depth: 0
+          path: "src"
 
-      - name: Prepare builds workspace (checkout or init)
-        uses: actions/checkout@v4
+      - name: Checkout builds
+        uses: actions/checkout@master
         with:
-          path: builds
-          fetch-depth: 0
-          token: ${{ secrets.GITHUB_TOKEN }}
-          # لا نحدد ref هنا: سننشئ/نفحص الفرع لاحقًا
-
-      - name: Ensure builds branch exists / checkout builds
-        run: |
-          cd $GITHUB_WORKSPACE/builds
-          git remote remove origin || true
-          git remote add origin https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}
-          # حاول جلب فرع builds إن وجد، وإلا أنشئه
-          git fetch origin builds || true
-          git checkout -B builds
-
+          ref: "builds"
+          path: "builds"
+      
       - name: Clean old builds
-        run: rm -f $GITHUB_WORKSPACE/builds/*.cs3 || true
+        run: rm -f $GITHUB_WORKSPACE/builds/*.cs3
 
       - name: Setup JDK 17
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@v1
         with:
-          distribution: 'temurin'
-          java-version: '17'
+          java-version: 17
 
-      - name: Make plugins and builds
-        working-directory: ${{ github.workspace }}/src
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v2
+
+      - name: Build Plugins
         run: |
-          chmod +x ./gradlew
+          cd $GITHUB_WORKSPACE/src
+          chmod +x gradlew
           ./gradlew make makePluginsJson
-          mkdir -p $GITHUB_WORKSPACE/builds
-          cp **/build/*.cs3 $GITHUB_WORKSPACE/builds || true
-          cp build/plugins.json $GITHUB_WORKSPACE/builds || true
+          cp **/build/*.cs3 $GITHUB_WORKSPACE/builds
+          cp build/plugins.json $GITHUB_WORKSPACE/builds
 
-      - name: Commit and push builds (only if changed)
+      - name: Push builds
         run: |
           cd $GITHUB_WORKSPACE/builds
-          git add -A
-          if git diff --cached --quiet; then
-            echo "No build changes to commit"
-          else
-            git config user.email "actions@github.com"
-            git config user.name "GitHub Actions"
-            git commit -m "Build $GITHUB_SHA"
-            git push --force origin HEAD:builds
-          fi
+          git config --local user.email "actions@github.com"
+          git config --local user.name "GitHub Actions"
+          git add .
+          git commit --amend -m "Build $GITHUB_SHA" || exit 0   # do not error if nothing to commit
+          git push --force
